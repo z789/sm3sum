@@ -96,6 +96,64 @@ print_out(int bsdstyle, FILE * fout, const char *fname,
 	return 0;
 }
 
+/*
+ * bsd style: "prefix (filename) = hex_hash"
+ *  example:
+ *  SM3 (/bin/ls) = d7c20ba3d32b42a946f17ff80f124e4a318846f37f14b9a926f0c9f1b3a76e12
+ *
+ * general style: "hex_hash  filename"
+ *  example:
+ *  d7c20ba3d32b42a946f17ff80f124e4a318846f37f14b9a926f0c9f1b3a76e12  /bin/ls
+*/
+static int splite_fname_hex_hash(char *buf, int len_buf, char *fname, int len_fname,
+                                         char *hash,  int len_hash)
+{
+	int ret = -1;
+	char *p_fname = NULL;
+	char *ptr = NULL;
+	char *tail = NULL;
+	const char *prefix = "SM3 (";
+	int len_prefix = strlen(prefix);
+	int len = 0;
+
+	if (!buf || len_buf <= 0 || !fname || len_fname <= 0 || !hash || len_hash < SM3_DIGEST_SIZE * 2)
+		return ret;
+
+	tail = buf + len_buf;
+
+	if (strncmp(buf, prefix, len_prefix) == 0) {
+		p_fname = buf + len_prefix;
+		ptr = strrchr(buf, '=');
+		if (ptr != NULL && p_fname < ptr - 2
+				&& tail - (ptr + 2) == SM3_DIGEST_SIZE * 2) {
+			memcpy(hash, ptr + 2, SM3_DIGEST_SIZE * 2);
+
+			len = ptr - 2 - p_fname;
+			if (len > len_fname) {
+				fprintf(stderr, "file name buf too small!\n");
+			} else {
+				memcpy(fname, p_fname, len);
+				ret = 0;
+			}
+		}
+	} else if ((ptr=strstr(buf, "  ")) != NULL) {
+		p_fname = ptr + 2;
+		if (ptr - buf == SM3_DIGEST_SIZE * 2 && p_fname < tail) {
+			memcpy(hash, buf, SM3_DIGEST_SIZE * 2);
+
+			len = tail - p_fname;
+			if (len > len_fname) {
+				fprintf(stderr, "file name buf too small!\n");
+			} else {
+				memcpy(fname, p_fname, len);
+				ret = 0;
+			}
+		}
+	}
+
+	return ret;
+}
+
 static int check_sm3(const char *outname)
 {
 	FILE *f = NULL;
@@ -117,10 +175,9 @@ static int check_sm3(const char *outname)
 		char hex_hash[SM3_DIGEST_SIZE * 2 + 1] = { 0 };
 		unsigned char old_hash[SM3_DIGEST_SIZE] = { 0 };
 		unsigned char new_hash[SM3_DIGEST_SIZE] = { 0 };
-		char name[16] = {0};
 		char *s = NULL;
 		int hash_len = 0;
-		int n, i;
+		int i;
 		unsigned int c;
 		int len = 0;
 		int ret = 0;
@@ -132,14 +189,10 @@ static int check_sm3(const char *outname)
 		if (line[len-1] == '\n')
 			line[len-1] = '\0';
 
-		n = sscanf(line, "%s (%[^)] %*s%*s %s\n", name, fname, hex_hash);
-		if (n != 3) {
-			n = sscanf(line, "%s  %s\n", hex_hash, fname);
-			if (n != 2) {
-				fprintf(stderr, "%s format err!\n", outname);
-				continue;
-			}
-		}
+		ret = splite_fname_hex_hash(line, strlen(line), fname, sizeof(fname)-1,
+                                            hex_hash, sizeof(hex_hash)-1);
+		if (ret < 0)
+			continue;
 
 		len = strlen(hex_hash);
 		hash_len = len/2;
