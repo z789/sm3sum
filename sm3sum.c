@@ -21,7 +21,7 @@ static int sm3_stream(FILE *stream, void *out, size_t outlen)
 	uint8_t *buf = (uint8_t *) malloc(buf_len);
 
 	if (!stream || !out || !buf || outlen != SM3_DIGEST_SIZE)
-		return -1;
+		goto end;
 
 	sm3_init(&ctx);
 
