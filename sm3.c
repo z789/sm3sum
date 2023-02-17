@@ -101,7 +101,6 @@ int sm3_final(struct sm3_ctx *ctx, unsigned char *digest, size_t dlen)
 }
 
 #define ROTATELEFT(X, n)  (((X)<<(n)) | ((X)>>(32-(n))))
-#define ROTATELEFT64(X, n)  (((X)<<((n)-32)) | ((X)>>(64-(n))))
 
 #define P0(x) ((x) ^  ROTATELEFT((x), 9)  ^ ROTATELEFT((x), 17))
 #define P1(x) ((x) ^  ROTATELEFT((x), 15) ^ ROTATELEFT((x), 23))
@@ -113,10 +112,36 @@ int sm3_final(struct sm3_ctx *ctx, unsigned char *digest, size_t dlen)
 #define GG1(x, y, z) (((x) & (y)) | ((~(x)) & (z)))
 
 
-static const uint32_t T16 = 0x79CC4519;
-static const uint32_t T64 = 0x7A879D8A;
+__attribute__((unused)) static const uint32_t T16 = 0x79CC4519;
+__attribute__((unused)) static const uint32_t T64 = 0x7A879D8A;
 
 #ifdef SM3_MACRO
+static const uint32_t T16_table[16] = {
+        0x79CC4519, 0xF3988A32, 0xE7311465, 0xCE6228CB,
+        0x9CC45197, 0x3988A32F, 0x7311465E, 0xE6228CBC,
+        0xCC451979, 0x988A32F3, 0x311465E7, 0x6228CBCE,
+        0xC451979C, 0x88A32F39, 0x11465E73, 0x228CBCE6,
+};
+
+static const uint32_t T64_table[64] = {
+        0x0, 0x0, 0x0, 0x0,
+        0x0, 0x0, 0x0, 0x0,
+        0x0, 0x0, 0x0, 0x0,
+        0x0, 0x0, 0x0, 0x0,
+        0x9D8A7A87, 0x3B14F50F, 0x7629EA1E, 0xEC53D43C,
+        0xD8A7A879, 0xB14F50F3, 0x629EA1E7, 0xC53D43CE,
+        0x8A7A879D, 0x14F50F3B, 0x29EA1E76, 0x53D43CEC,
+        0xA7A879D8, 0x4F50F3B1, 0x9EA1E762, 0x3D43CEC5,
+        0x7A879D8A, 0xF50F3B14, 0xEA1E7629, 0xD43CEC53,
+        0xA879D8A7, 0x50F3B14F, 0xA1E7629E, 0x43CEC53D,
+        0x879D8A7A, 0x0F3B14F5, 0x1E7629EA, 0x3CEC53D4,
+        0x79D8A7A8, 0xF3B14F50, 0xE7629EA1, 0xCEC53D43,
+        0x9D8A7A87, 0x3B14F50F, 0x7629EA1E, 0xEC53D43C,
+        0xD8A7A879, 0xB14F50F3, 0x629EA1E7, 0xC53D43CE,
+        0x8A7A879D, 0x14F50F3B, 0x29EA1E76, 0x53D43CEC,
+        0xA7A879D8, 0x4F50F3B1, 0x9EA1E762, 0x3D43CEC5,
+};
+
 #define W16_INIT(WP, pb)                     \
 	do {                                 \
 		WP[0] = cpu_to_be32(pb[0]);  \
@@ -199,7 +224,7 @@ static const uint32_t T64 = 0x7A879D8A;
 	
 #define FOR16_UNIT(jp)                                                             \
 	do {                                                                       \
-		SS1 = ROTATELEFT((ROTATELEFT(A, 12) + E + ROTATELEFT(T16, jp)), 7);\
+		SS1 = ROTATELEFT((ROTATELEFT(A, 12) + E + T16_table[jp]), 7);      \
 		SS2 = SS1 ^ ROTATELEFT(A, 12);                                     \
 		TT1 = FF0(A, B, C) + D + SS2 + (W[jp] ^ W[jp+4]);                  \
 		TT2 = GG0(E, F, G) + H + SS1 + W[jp];                              \
@@ -215,23 +240,7 @@ static const uint32_t T64 = 0x7A879D8A;
                                                                                    
 #define FOR64_UNIT(jp)                                                             \
 	do {                                                                       \
-		SS1 = ROTATELEFT((ROTATELEFT(A, 12) + E + ROTATELEFT(T64, jp)), 7);\
-		SS2 = SS1 ^ ROTATELEFT(A, 12);                                     \
-		TT1 = FF1(A, B, C) + D + SS2 + (W[jp] ^ W[jp+4]);                  \
-		TT2 = GG1(E, F, G) + H + SS1 + W[jp];                              \
-		D = C;                                                             \
-		C = ROTATELEFT(B, 9);                                              \
-		B = A;                                                             \
-		A = TT1;                                                           \
-		H = G;                                                             \
-		G = ROTATELEFT(F, 19);                                             \
-		F = E;                                                             \
-		E = P0(TT2);                                                       \
-	} while (0)                                                                
-
-#define FOR64_UNIT64(jp)                                                           \
-	do {                                                                       \
-		SS1 = ROTATELEFT((ROTATELEFT(A, 12) + E + ROTATELEFT64(T64, jp)), 7);\
+		SS1 = ROTATELEFT((ROTATELEFT(A, 12) + E + T64_table[jp]), 7);      \
 		SS2 = SS1 ^ ROTATELEFT(A, 12);                                     \
 		TT1 = FF1(A, B, C) + D + SS2 + (W[jp] ^ W[jp+4]);                  \
 		TT2 = GG1(E, F, G) + H + SS1 + W[jp];                              \
@@ -284,37 +293,37 @@ static const uint32_t T64 = 0x7A879D8A;
 		FOR64_UNIT(30); \
 		FOR64_UNIT(31); \
 		FOR64_UNIT(32); \
-		FOR64_UNIT64(33); \
-		FOR64_UNIT64(34); \
-		FOR64_UNIT64(35); \
-		FOR64_UNIT64(36); \
-		FOR64_UNIT64(37); \
-		FOR64_UNIT64(38); \
-		FOR64_UNIT64(39); \
-		FOR64_UNIT64(40); \
-		FOR64_UNIT64(41); \
-		FOR64_UNIT64(42); \
-		FOR64_UNIT64(43); \
-		FOR64_UNIT64(44); \
-		FOR64_UNIT64(45); \
-		FOR64_UNIT64(46); \
-		FOR64_UNIT64(47); \
-		FOR64_UNIT64(48); \
-		FOR64_UNIT64(49); \
-		FOR64_UNIT64(50); \
-		FOR64_UNIT64(51); \
-		FOR64_UNIT64(52); \
-		FOR64_UNIT64(53); \
-		FOR64_UNIT64(54); \
-		FOR64_UNIT64(55); \
-		FOR64_UNIT64(56); \
-		FOR64_UNIT64(57); \
-		FOR64_UNIT64(58); \
-		FOR64_UNIT64(59); \
-		FOR64_UNIT64(60); \
-		FOR64_UNIT64(61); \
-		FOR64_UNIT64(62); \
-		FOR64_UNIT64(63); \
+		FOR64_UNIT(33); \
+		FOR64_UNIT(34); \
+		FOR64_UNIT(35); \
+		FOR64_UNIT(36); \
+		FOR64_UNIT(37); \
+		FOR64_UNIT(38); \
+		FOR64_UNIT(39); \
+		FOR64_UNIT(40); \
+		FOR64_UNIT(41); \
+		FOR64_UNIT(42); \
+		FOR64_UNIT(43); \
+		FOR64_UNIT(44); \
+		FOR64_UNIT(45); \
+		FOR64_UNIT(46); \
+		FOR64_UNIT(47); \
+		FOR64_UNIT(48); \
+		FOR64_UNIT(49); \
+		FOR64_UNIT(50); \
+		FOR64_UNIT(51); \
+		FOR64_UNIT(52); \
+		FOR64_UNIT(53); \
+		FOR64_UNIT(54); \
+		FOR64_UNIT(55); \
+		FOR64_UNIT(56); \
+		FOR64_UNIT(57); \
+		FOR64_UNIT(58); \
+		FOR64_UNIT(59); \
+		FOR64_UNIT(60); \
+		FOR64_UNIT(61); \
+		FOR64_UNIT(62); \
+		FOR64_UNIT(63); \
 	} while (0)
 
 static void sm3_compress(uint32_t digest[8], const unsigned char block[64])             
@@ -411,4 +420,3 @@ static void sm3_compress(uint32_t digest[8], const unsigned char block[64])
 	digest[7] ^= H;
 }
 #endif
-
